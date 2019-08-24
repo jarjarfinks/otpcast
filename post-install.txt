@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# Prepares a clean Raspbian install with nessecary software and optimizations for OpenTPCast.  Note that this script is intended only for use by OpenTPCast image maintainers.
+# An installation guide on how to use this script can be found at https://github.com/OpenTPCast/Docs/blob/master/guides/PREPAREIMAGE.md
+
+# Original Author: Genesis (https://github.com/NGenesis), OpenTPCast (https://github.com/OpenTPCast)
+# Updated Script Author: Joshua Finks(https://github.com/jarjarfinks)
+# Stop on errors
+set -e
+
+logger "OpenTPCast image preparation is starting..."
+echo "-------------------------------------------------------------------"
+echo "|                                                                 |"
+echo "|                 OpenTPCast - Preparing image...                 |"
+echo "|                                                                 |"
+echo "-------------------------------------------------------------------"
+
+# Disable prompts during anattended upgrade
+logger "Disabling prompts during anattended upgrade"
+if [ ! -f /etc/ucf.conf.bak ]; then
+	sudo cp /etc/ucf.conf /etc/ucf.conf.bak
+	echo 'conf_force_conffold=YES' | sudo tee -a /etc/ucf.conf > /dev/null
+fi
+
+logger "Downloading and installing Raspbian updates"
+unset UCF_FORCE_CONFFNEW && export UCF_FORCE_CONFFOLD=YES && export DEBIAN_FRONTEND=noninteractive && export APT_LISTCHANGES_FRONTEND=none && export DEBIAN_PRIORITY=critical && 
+sudo apt-get remove apt-listchanges --assume-yes --force-yes && 
+echo 'libc6 libraries/restart-without-asking boolean true' | sudo debconf-set-selections && 
+
+# Upgrade Rapsian distro
+sudo apt-get --force-yes -fuy autoremove && 
+sudo apt-get --force-yes clean && 
+sudo apt-get update && 
+sudo apt-get --force-yes -o Dpkg::Options::="--force-confold" --force-yes -o Dpkg::Options::="--force-confdef" -fuy dist-upgrade && 
+sudo apt-get --force-yes -o Dpkg::Options::="--force-confold" --force-yes -o Dpkg::Options::="--force-confdef" --purge -fuy autoremove && 
+sudo apt-get --force-yes clean
+
+# Upgrade kernel
+logger "Disabling unused components"
+sudo sed -i 's/dtparam=audio=on/dtparam=audio=off/g' /boot/config.txt
+echo "dtoverlay=pi3-disable-bt" | sudo tee -a /boot/config.txt > /dev/null
+
+# Optimize for faster boot time
+logger "Optimizing for faster boot time"
+sudo sed -i 's/rootwait/rootwait quiet/g' /boot/cmdline.txt
+
+sudo wget -q -e check_certificate=off -O /etc/init.d/opentpcast-initwlan https://rawgit.com/OpenTPCast/Docs/master/files/prepareimage/opentpcast-initwlan && sudo chmod +x /etc/init.d/opentpcast-initwlan
+sudo update-rc.d opentpcast-initwlan defaults > /dev/null 2>&1 || true
+
+# Install VirtualHere USB Server (Server licence must be purchased from https://www.virtualhere.com/tpcast_purchase to use)
+logger "Installing VirtualHere USB Server"
+sudo wget -e check_certificate=off -q -O /usr/sbin/vhusbdtpcast https://virtualhere.com/sites/default/files/usbserver/vhusbdarm && sudo chmod +x /usr/sbin/vhusbdtpcast
+sudo wget -e check_certificate=off -q -O /etc/init.d/vhusbdpin https://www.virtualhere.com/sites/default/files/usbserver/scripts/vhusbdpin && sudo chmod +x /etc/init.d/vhusbdpin
+sudo sed -i 's/vhusbdarm/vhusbdtpcast/g' /etc/init.d/vhusbdpin
+sudo update-rc.d vhusbdpin defaults > /dev/null 2>&1 || true
+
+# Configure VirtualHere USB Server for TPCast devices
+# HMD camera has custom event handler onReset.$VENDOR_ID$.$PRODUCT_ID$=
+# WLAN & VH debugging devices are hidden from client
+echo -e "ServerName=TPCast\nonDeviceIgnore=return 0\nonChangeNickname=return 1\nonReset.0bb4.2c87=\nonReset.28de.2000=\nDeviceNicknames=Vive Camera,0bb4,2c87,1122\nIgnoredDevices=424/ec00,bda/8194,bda/811" | sudo tee /root/config.ini > /dev/null
+
+# Create default configuration files
+logger "Creating default configuration files"
+sudo wget -e check_certificate=off -q -O /boot/opentpcast.LICENSE https://rawgit.com/OpenTPCast/Docs/master/LICENSE
+sudo wget -e check_certificate=off -q -O /boot/opentpcast.txt https://rawgit.com/OpenTPCast/Docs/master/files/prepareimage/opentpcast.txt
+sudo wget -e check_certificate=off -q -O /boot/opentpcastversion.txt https://rawgit.com/OpenTPCast/Docs/master/files/prepareimage/opentpcastversion.txt
+sudo touch /boot/initwlan
+
+logger "Updating hostname"
+sudo hostname tpcast
+sudo sed -i "s/$(cat /etc/hostname)/tpcast/g" /etc/hosts
+sudo sed -i "s/$(cat /etc/hostname)/tpcast/g" /etc/hostname
+
+# Update password
+logger "Updating password"
+echo "pi:rpi | sudo chpasswd
+
+logger "OpenTPCast image preparation has finished, shutting down to finalize changes..."
+echo "--------------------------------------------------------------------------------------"
+echo "|                                                                                    |"
+echo "|                 OpenTPCast - Image preparation done, shutting down...              |"
+echo "|                                                                                    |"
+echo "--------------------------------------------------------------------------------------"
+echo -e "OpenTPCast image preparation has finished, please wait a few seconds while the TPCast power box shuts down to finalize changes...\nThe MicroSD card can now be backed up to an image file for distribution to end users."
+
+# Remove this script once done
+rm -- "$0"
+
+# Reboot for changes to take effect
+sudo shutdown now

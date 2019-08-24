@@ -4,3 +4,5 @@ rootfstype=ext4
 disable_splash=1
 disable_raspberries=1
 firmware_packages=1
+packages=git,wpa_supplicant
+ip_addr=dhcp
