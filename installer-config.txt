@@ -1,0 +1,6 @@
+preset=base
+hostname=tpcast
+rootfstype=ext4
+disable_splash=1
+disable_raspberries=1
+firmware_packages=1

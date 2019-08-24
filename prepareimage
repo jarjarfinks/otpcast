@@ -51,12 +51,6 @@ echo "dtoverlay=pi3-disable-bt" | sudo tee -a /boot/config.txt > /dev/null
 logger "Optimizing for faster boot time"
 sudo sed -i 's/rootwait/rootwait quiet/g' /boot/cmdline.txt
 
-# Configure WLAN interface
-logger "Configuring WLAN interface"
-sudo make -C ./hostap/wpa_supplicant/wpa_supplicant
-sudo cp hostap/wpa_supplicant/wpa_supplicant /usr/sbin
-sudo rm -rf opentpcast_wpa_supplicant
-
 sudo wget -q -e check_certificate=off -O /etc/init.d/opentpcast-initwlan https://rawgit.com/OpenTPCast/Docs/master/files/prepareimage/opentpcast-initwlan && sudo chmod +x /etc/init.d/opentpcast-initwlan
 sudo update-rc.d opentpcast-initwlan defaults > /dev/null 2>&1 || true
 
@@ -79,49 +73,6 @@ sudo wget -e check_certificate=off -q -O /boot/opentpcast.txt https://rawgit.com
 sudo wget -e check_certificate=off -q -O /boot/opentpcastversion.txt https://rawgit.com/OpenTPCast/Docs/master/files/prepareimage/opentpcastversion.txt
 sudo touch /boot/initwlan
 
-# Install mjpg-streamer
-logger "Installing MJPG-Streamer"
-git clone https://github.com/OpenTPCast/mjpg-streamer
-sudo make -C ./mjpg-streamer/mjpg-streamer-experimental && sudo make -C ./mjpg-streamer/mjpg-streamer-experimental install
-sudo rm -rf mjpg-streamer
-
-# Configure Lighthttpd & PHP
-logger "Configuring Lighthttpd & PHP"
-sudo lighty-enable-mod fastcgi fastcgi-php rewrite && sudo service lighttpd force-reload && sudo usermod -a -G www-data pi && sudo rm /var/www/html/index.lighttpd.html
-
-# Limit web server root script access to OpenTPCast Control Panel
-logger "Limiting web server root script access to OpenTPCast Control Panel"
-echo "www-data ALL=(ALL) NOPASSWD: /usr/local/bin/opentpcast-ctrl" | sudo tee /etc/sudoers.d/100_opentpcast-ctrl && sudo chmod 0440 /etc/sudoers.d/100_opentpcast-ctrl
-
-# Download OpenTPCast Control Panel and control scripts
-logger "Downloading OpenTPCast Control Panel and control scripts"
-git clone https://github.com/OpenTPCast/opentpcast_ctrl
-
-# Install OpenTPCast Control Panel root script
-logger "Installing OpenTPCast Control Panel root script"
-sudo cp opentpcast_ctrl/opentpcast-ctrl /usr/local/bin/opentpcast-ctrl && sudo chown root:www-data /usr/local/bin/opentpcast-ctrl && sudo chmod 750 /usr/local/bin/opentpcast-ctrl
-
-# Install OpenTPCast Camera service
-logger "Installing OpenTPCast Camera service"
-sudo cp opentpcast_ctrl/opentpcast-camera /etc/init.d/opentpcast-camera && sudo chmod +x /etc/init.d/opentpcast-camera
-
-# Install OpenTPCast Control Panel web interface
-logger "Installing OpenTPCast Control Panel web interface"
-sudo cp opentpcast_ctrl/controlpanel/* /var/www/html/
-
-# Install OpenTPCast web API
-logger "Installing OpenTPCast web API"
-sudo cp opentpcast_ctrl/api/20-opentpcast.conf /etc/lighttpd/conf-available/20-opentpcast.conf
-sudo cp opentpcast_ctrl/api/api.php /var/www/html/
-sudo lighty-enable-mod opentpcast && sudo service lighttpd force-reload
-
-sudo rm -rf opentpcast_ctrl
-
-# Configure public web folder
-logger "Configuring public web folder"
-sudo chown -R www-data:www-data /var/www && sudo chmod -R g+rw /var/www
-
-# Update hostname
 logger "Updating hostname"
 sudo hostname tpcast
 sudo sed -i "s/$(cat /etc/hostname)/tpcast/g" /etc/hosts
