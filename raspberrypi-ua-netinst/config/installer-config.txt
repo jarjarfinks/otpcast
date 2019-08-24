@@ -1,3 +1,8 @@
-# To customize the raspberrypi-unattended-installer:
-#
-# Place your settings in this file as described in the README.md or in the advanced documentation.
+preset=base
+hostname=tpcast
+rootfstype=ext4
+disable_splash=1
+disable_raspberries=1
+firmware_packages=1
+packages=git,wpa_supplicant
+ip_addr=dhcp
